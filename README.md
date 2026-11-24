@@ -1,0 +1,160 @@
+# loghunt
+
+[![ci](https://github.com/12Viskas12/loghunt/actions/workflows/ci.yml/badge.svg)](https://github.com/12Viskas12/loghunt/actions/workflows/ci.yml)
+![python](https://img.shields.io/badge/python-3.9%2B-blue)
+![dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
+![license](https://img.shields.io/badge/license-MIT-lightgrey)
+
+A command line tool that reads SSH and web server logs and points out what looks like an attack: password guessing, user enumeration, vulnerability scans, SQL injection and similar requests. It checks one thing that matters more than the rest: **a successful login right after a brute force**. It works on files after the fact and as a live monitor that alerts you in the terminal, on the desktop and in Telegram.
+
+I wrote it to practice the detection side of security. It uses only the Python standard library, Python 3.9 or newer.
+
+![live alerts: SSH brute force, then a successful login](evidence/screenshots/ssh-critical.png)
+
+*`loghunt watch` while a brute force against SSH ends with a successful login (MITRE T1078). The popup is a normal system notification.*
+
+## Try it
+
+```bash
+git clone https://github.com/12Viskas12/loghunt
+cd loghunt
+pip install -e .
+loghunt samples/auth.log samples/access.log --year 2026
+```
+
+The `samples/` folder has logs I generated with `scripts/make_samples.py`. Every address in them comes from the ranges reserved for documentation (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24), so no real host is in there. The files contain ordinary visitors and a few harmless typos mixed with the attacks, and the tool leaves those alone.
+
+![report for the sample logs](evidence/screenshots/report-samples.png)
+
+The report starts like this, the whole thing in Markdown is in [docs/example-report.md](docs/example-report.md):
+
+```
+read 368 lines, 368 understood
+
+findings: 1 critical, 9 high, 4 medium
+
+[CRITICAL] ssh-login-after-bruteforce  192.0.2.99
+           successful login as 'deploy' right after a brute force, the account may be compromised
+           2026-11-18 12:06:30 -> 2026-11-18 12:06:30   T1078 Valid Accounts
+           | Nov 18 12:06:30 web01 sshd[26558]: Accepted password for deploy from 192.0.2.99 port 51234 ssh2
+```
+
+Each finding comes with the log lines that caused it, so you can check the status codes yourself.
+
+## What it looks for
+
+| Rule | Level | What triggers it | ATT&CK |
+|---|---|---|---|
+| `ssh-bruteforce` | high | 5 failed logins from one address within 10 minutes | T1110 |
+| `ssh-user-enumeration` | medium | 5 different usernames that don't exist, from one address | T1110 |
+| `ssh-login-after-bruteforce` | critical | an accepted login from an address that was just brute forcing | T1078 |
+| `web-login-bruteforce` | high | 10 POST requests to a login page within 10 minutes | T1110 |
+| `web-scan` | medium | 15 client errors within 10 minutes, or 3 different sensitive paths (`/.env`, `/.git/`, `/phpmyadmin` and so on) | T1595 |
+| `web-scanner-agent` | medium | a user agent of sqlmap, nikto, nmap, gobuster and similar tools | T1595 |
+| `web-attack-*` | high | SQL injection, XSS, path traversal, command injection or log4shell patterns in the URL (decoded twice) | T1190 |
+
+The details, the reasoning and the thresholds are in [docs/rules.md](docs/rules.md). All thresholds can be changed with options such as `--window`, `--ssh-fails` and `--web-errors`.
+
+## On a real server
+
+```bash
+sudo loghunt /var/log/auth.log /var/log/nginx/access.log
+sudo loghunt /var/log/auth.log.1.gz --format json -o report.json
+```
+
+Arch and other systemd distributions keep the sshd log in the journal, there is no `auth.log`. Pipe it in:
+
+```bash
+journalctl -u sshd --no-pager -o short-iso | loghunt - --type ssh
+```
+
+It reads sshd lines from `auth.log` (or the same lines with ISO timestamps) and the common `combined` format used by nginx and Apache. Rotated `.gz` files work. Syslog lines have no year, so the current year is assumed. Use `--year` for old logs.
+
+- `--format text|brief|markdown|json` picks the report format, `brief` is one line per finding
+- `--ignore-ip` skips an address, for example your own monitoring
+- `--fail-on high` makes the exit code 1 if there is a finding of that level or higher, so it can run in a cron job or CI
+
+## Live monitoring and alerts
+
+`loghunt watch` follows logs and tells you when an attack starts, instead of you running a report afterwards. Each finding is reported once, then that rule and address stay quiet for an hour (`cooldown` in the config).
+
+```bash
+loghunt init-config                      # writes ~/.config/loghunt/loghunt.ini
+loghunt watch                            # journal of sshd.service from the config
+loghunt watch --web /var/log/nginx/access.log --ssh-file /var/log/auth.log
+loghunt watch --test-notify              # one fake alert to every channel
+```
+
+| Channel | What you get |
+|---|---|
+| console | every alert, coloured by level |
+| file | every alert as a JSON line in `~/.local/state/loghunt/alerts.jsonl` |
+| desktop | a system notification through `notify-send` (package `libnotify`) |
+| Telegram | a bot message to your phone, `high` and above by default, see [docs/telegram.md](docs/telegram.md) |
+
+Console and file get every alert from `medium` up. The desktop and Telegram get at most five alerts per batch of log lines plus one summary, so a big scan doesn't bury the screen or the phone.
+
+![alerts while the demo attacks run](evidence/screenshots/watch-attacks.png)
+
+*Left: `loghunt watch`. Right: the curl commands that caused each alert.*
+
+![desktop notifications](evidence/screenshots/desktop-notifications.png)
+
+
+You can run the whole demo yourself, against a local web server and a log file you write, in [docs/demo.md](docs/demo.md).
+
+## Terminal menu
+
+Run `loghunt` without arguments in a terminal, or `loghunt menu`. It shows the state of the service and the channels and lets you analyse a file or the sshd journal, start the live monitor, control the service, read the last alerts and send a test notification.
+
+![terminal menu](evidence/screenshots/menu.png)
+
+## Running it as a service
+
+```bash
+scripts/install-service.sh        # user unit, enabled and started
+loghunt service status            # also: start, stop, logs, uninstall
+loginctl enable-linger $USER      # keep it running when you are logged out
+```
+
+It is a systemd user service (`systemctl --user status loghunt`), so no root is needed. Reading the sshd journal as a normal user needs the group `systemd-journal`. More in [docs/service.md](docs/service.md).
+
+## How it is built
+
+```
+log line -> parsers.py -> Event -> detectors.py -> Finding -+-> report.py   text, brief, markdown, json
+                                                            +-> watch.py    cooldown -> console | JSON file | notify-send | Telegram
+```
+
+- `parsers.py` turns sshd and `combined` web lines into `Event` objects and skips what it does not understand, so one broken line never stops a run.
+- `detectors.py` holds the rules. A rule is a function from a list of events to findings, which makes each one easy to test on its own. Adding one is described in [docs/rules.md](docs/rules.md).
+- `watch.py` runs one thread per source (file or journal) that puts lines on a queue, groups them into batches, feeds a `Watcher` that keeps the last hour of events, and hands new findings to the notifiers. A failing notifier never stops the others.
+- `telegram.py` is a notifier on `urllib` with no dependency. The bot token is checked before use and never appears in errors, and messages are plain text because log content is attacker-controlled.
+
+## Limits
+
+- The rules are simple on purpose. They look at counts and patterns, not at behaviour over days, so a slow attack spread over hours won't be seen.
+- Several people behind one NAT address can look like one noisy client. Monitoring tools can trigger the scanner rules. Use `--ignore-ip` for those.
+- A match on a pattern doesn't mean the attack worked. Check the status code in the evidence lines.
+- Only sshd and the combined web log format are supported.
+- Telegram messages are sent one by one with a 5 second timeout and no retries. If Telegram is unreachable the other channels still work.
+- The service, the desktop popups and Telegram are covered by unit tests with fakes, not by a real systemd or a real bot. Check them on your own machine with `loghunt watch --test-notify`.
+
+## Tests
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
+There are 95 tests for the parsers, every rule (including the edge of each threshold and cases that must stay quiet), the watcher, every notifier, the menu and the command line. GitHub Actions runs them on Python 3.9, 3.11 and 3.13.
+
+![pytest](evidence/screenshots/tests.png)
+
+## Use it responsibly
+
+loghunt only reads logs. Run it on systems you own or are allowed to monitor, and if you reproduce the demo, attack only your own machine.
+
+## License
+
+MIT

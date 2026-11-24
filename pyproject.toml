@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "loghunt"
+version = "0.1.0"
+description = "Find brute force, scans and web attacks in SSH and web server logs"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+loghunt = "loghunt.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
