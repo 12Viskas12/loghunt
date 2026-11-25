@@ -7,8 +7,6 @@
 
 A command line tool that reads SSH and web server logs and points out what looks like an attack: password guessing, user enumeration, vulnerability scans, SQL injection and similar requests. It checks one thing that matters more than the rest: **a successful login right after a brute force**. It works on files after the fact and as a live monitor that alerts you in the terminal, on the desktop and in Telegram.
 
-I wrote it to practice the detection side of security. It uses only the Python standard library, Python 3.9 or newer.
-
 ![live alerts: SSH brute force, then a successful login](evidence/screenshots/ssh-critical.png)
 
 *`loghunt watch` while a brute force against SSH ends with a successful login (MITRE T1078). The popup is a normal system notification.*
