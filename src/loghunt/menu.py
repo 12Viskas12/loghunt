@@ -11,6 +11,7 @@ from . import __version__
 from . import config as cfgmod
 from . import service
 from .cli import analyze
+from .telegram import CHAT_RE, TOKEN_RE, TelegramError, TelegramNotifier, api_call, find_chat_id
 from .watch import build_notifiers, dispatch, run_watch, test_alert
 
 BANNER = r"""
@@ -167,6 +168,78 @@ class Menu:
         self.say("channels: " + ", ".join(n.name for n in notifiers))
         dispatch([test_alert()], notifiers)
 
+    def do_telegram(self) -> None:
+        s = self.s
+        while True:
+            state = f"bot set up, chat {s.telegram_chat_id}" if s.has_telegram else "not set up"
+            self.panel("telegram", [f"state: {state}", "", "1  set the bot token and chat", "2  send a test message",
+                                    "3  remove the bot", "0  back"])
+            choice = self.ask("telegram> ")
+            if choice in ("0", "q", ""):
+                return
+            if choice == "1":
+                self.telegram_setup()
+            elif choice == "2":
+                self.telegram_test()
+            elif choice == "3":
+                cfgmod.save_telegram("", "")
+                s.telegram_token = s.telegram_chat_id = ""
+                self.say("removed", DG)
+                self.restart_service()
+            else:
+                self.say("unknown choice", R)
+
+    def telegram_test(self) -> None:
+        s = self.s
+        if not s.has_telegram:
+            self.say("set the token first", R)
+            return
+        try:
+            TelegramNotifier(s.telegram_token, s.telegram_chat_id, s.telegram_min_severity).send(test_alert())
+            self.say("sent, look at your chat", G)
+        except (ValueError, OSError) as exc:
+            self.say(f"telegram refused it: {exc}", R)
+
+    def telegram_setup(self) -> None:
+        self.say("1. In Telegram open @BotFather, send /newbot and copy the token it gives you.", DG)
+        token = self.ask("bot token: ")
+        if not token:
+            return
+        if not TOKEN_RE.match(token):
+            self.say("that does not look like a token, it should be like 123456789:AA...", R)
+            return
+        try:
+            me = api_call(token, "getMe")["result"]
+        except (TelegramError, KeyError) as exc:
+            self.say(f"the token does not work: {exc}", R)
+            return
+        self.say(f"bot found: @{me.get('username', '?')}", G)
+        self.say("2. Open your bot in Telegram, press Start and send it any message.", DG)
+        self.ask("[enter] when you have sent it ")
+        chat = None
+        try:
+            chat = find_chat_id(token)
+        except TelegramError as exc:
+            self.say(f"cannot read the bot updates: {exc}", R)
+        if chat:
+            self.say(f"chat id found: {chat}", G)
+        else:
+            chat = self.ask("no message found, type the chat id by hand (empty to cancel): ")
+            if not chat:
+                return
+            if not CHAT_RE.match(chat):
+                self.say("the chat id must be a number or @channelname", R)
+                return
+        path = cfgmod.save_telegram(token, chat)
+        self.s.telegram_token, self.s.telegram_chat_id = token, chat
+        self.say(f"saved to {path}", G)
+        self.restart_service()
+
+    def restart_service(self) -> None:
+        if service.state() == "active":
+            service.run("restart")
+            self.say("service restarted with the new settings", DG)
+
     def do_config(self) -> None:
         path = cfgmod.config_path()
         if not path.exists():
@@ -186,7 +259,8 @@ class Menu:
             ("4", "background service (systemd)", self.do_service),
             ("5", "recent alerts", self.do_alerts),
             ("6", "send a test notification", self.do_test),
-            ("7", "config", self.do_config),
+            ("7", "telegram bot", self.do_telegram),
+            ("8", "config", self.do_config),
             ("0", "quit", None),
         ]
 

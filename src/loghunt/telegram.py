@@ -9,6 +9,7 @@ from typing import Callable, Optional
 from .models import SEVERITIES, severity_rank
 
 API = "https://api.telegram.org/bot{token}/sendMessage"
+API_METHOD = "https://api.telegram.org/bot{token}/{method}"
 TOKEN_RE = re.compile(r"^\d{5,}:[A-Za-z0-9_-]{20,}$")
 CHAT_RE = re.compile(r"^(-?\d+|@[A-Za-z][A-Za-z0-9_]{4,})$")
 ICONS = {"critical": "\U0001F6A8", "high": "\U0001F534", "medium": "\U0001F7E0", "low": "\U0001F535"}
@@ -81,3 +82,28 @@ class TelegramNotifier:
             raise TelegramError(f"HTTP {exc.code} {_description(exc)}".strip()) from None
         if not isinstance(body, dict) or not body.get("ok"):
             raise TelegramError("Telegram answered ok=false")
+
+
+def api_call(token: str, method: str, opener: Optional[Callable] = None, timeout: float = 10.0) -> dict:
+    """GET a Bot API method such as getMe or getUpdates. Errors never contain the token."""
+    req = urllib.request.Request(API_METHOD.format(token=token, method=method))
+    try:
+        with (opener or urllib.request.urlopen)(req, timeout=timeout) as resp:
+            body = json.loads(resp.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as exc:
+        raise TelegramError(f"HTTP {exc.code} {_description(exc)}".strip()) from None
+    except urllib.error.URLError as exc:
+        raise TelegramError(f"cannot reach Telegram ({type(exc.reason).__name__})") from None
+    if not isinstance(body, dict) or not body.get("ok"):
+        raise TelegramError("Telegram answered ok=false")
+    return body
+
+
+def find_chat_id(token: str, opener: Optional[Callable] = None) -> Optional[str]:
+    """The chat of the newest message the bot has received, or None."""
+    for upd in reversed(api_call(token, "getUpdates", opener).get("result", [])):
+        for key in ("message", "channel_post", "edited_message"):
+            chat = (upd.get(key) or {}).get("chat")
+            if chat and "id" in chat:
+                return str(chat["id"])
+    return None

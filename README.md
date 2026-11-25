@@ -11,12 +11,30 @@ A command line tool that reads SSH and web server logs and points out what looks
 
 *`loghunt watch` while a brute force against SSH ends with a successful login (MITRE T1078). The popup is a normal system notification.*
 
-## Try it
+## Install
+
+Arch Linux, as a normal pacman package:
+
+```bash
+git clone https://github.com/12Viskas12/loghunt
+cd loghunt/packaging/arch
+makepkg -si
+```
+
+Debian and Ubuntu:
 
 ```bash
 git clone https://github.com/12Viskas12/loghunt
 cd loghunt
-pip install -e .
+scripts/build-deb.sh
+sudo apt install ./dist/loghunt_0.1.0_all.deb
+```
+
+Both put `loghunt` into `/usr/bin` and the service unit into `/usr/lib/systemd/user`, so it works from any directory and `pacman -R loghunt` or `apt remove loghunt` takes it off again. For development, `pip install -e .` inside a virtualenv works too.
+
+## Try it
+
+```bash
 loghunt samples/auth.log samples/access.log --year 2026
 ```
 
@@ -103,14 +121,14 @@ You can run the whole demo yourself, against a local web server and a log file y
 
 ## Terminal menu
 
-Run `loghunt` without arguments in a terminal, or `loghunt menu`. It shows the state of the service and the channels and lets you analyse a file or the sshd journal, start the live monitor, control the service, read the last alerts and send a test notification.
+Run `loghunt` without arguments in a terminal, or `loghunt menu`. It shows the state of the service and the channels and lets you analyse a file or the sshd journal, start the live monitor, control the service, read the last alerts, send a test notification and set up the Telegram bot. For the bot it asks for the token from @BotFather, checks it, finds your chat id from the first message you send to the bot and saves both to the config.
 
 ![terminal menu](evidence/screenshots/menu.png)
 
 ## Running it as a service
 
 ```bash
-scripts/install-service.sh        # user unit, enabled and started
+loghunt service install           # enable and start the user service
 loghunt service status            # also: start, stop, logs, uninstall
 loginctl enable-linger $USER      # keep it running when you are logged out
 ```

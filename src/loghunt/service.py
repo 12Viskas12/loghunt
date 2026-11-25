@@ -36,6 +36,17 @@ def unit_path() -> Path:
     return unit_dir() / UNIT
 
 
+PACKAGED_UNITS = (Path("/usr/lib/systemd/user") / UNIT, Path("/etc/systemd/user") / UNIT)
+
+
+def packaged_unit() -> Optional[Path]:
+    """The unit shipped by the pacman or apt package, if there is one."""
+    for p in PACKAGED_UNITS:
+        if p.exists():
+            return p
+    return None
+
+
 def unit_text(python: Optional[str] = None) -> str:
     return UNIT_TEXT.format(python=python or sys.executable)
 
@@ -56,9 +67,12 @@ def install(python: Optional[str] = None, start: bool = True) -> List[str]:
     if not cfgmod.config_path().exists():
         notes.append(f"config written to {cfgmod.write_default()}")
     path = unit_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(unit_text(python), encoding="utf-8")
-    notes.append(f"unit written to {path}")
+    if packaged_unit() and not path.exists():
+        notes.append(f"using the unit from the package: {packaged_unit()}")
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(unit_text(python), encoding="utf-8")
+        notes.append(f"unit written to {path}")
     for args in (("daemon-reload",), ("enable", "--now", UNIT) if start else ("enable", UNIT)):
         code, out = systemctl(*args)
         if code != 0:
@@ -83,7 +97,7 @@ def state() -> str:
     """active, inactive, failed, not-installed or no-systemd."""
     if not shutil.which("systemctl"):
         return "no-systemd"
-    if not unit_path().exists():
+    if not unit_path().exists() and not packaged_unit():
         return "not-installed"
     _, out = systemctl("is-active", UNIT)
     return out.splitlines()[0] if out else "unknown"

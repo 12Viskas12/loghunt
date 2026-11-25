@@ -3,11 +3,10 @@
 ## Install
 
 ```bash
-scripts/setup.sh                 # once, makes .venv
-scripts/install-service.sh
+loghunt service install
 ```
 
-The script writes `~/.config/loghunt/loghunt.ini` if it is missing and `~/.config/systemd/user/loghunt.service`, then runs `systemctl --user enable --now loghunt.service`. The unit starts `.venv/bin/python -m loghunt watch`, so it keeps working when the venv is not activated.
+This writes `~/.config/loghunt/loghunt.ini` if it is missing, then runs `systemctl --user enable --now loghunt.service`. The pacman and apt packages ship the unit in `/usr/lib/systemd/user`, and it is used as it is. After a plain pip install the command writes its own unit into `~/.config/systemd/user` that starts the same Python.
 
 Check it:
 
@@ -60,7 +59,7 @@ Restart after changes: `loghunt service restart`.
 
 ## Telegram
 
-Add a `[telegram]` section to `loghunt.ini` (token and chat id, see [telegram.md](telegram.md)) and restart the service. Environment variables from your shell are not visible to the unit, so use the file.
+Set the bot up from the menu (`loghunt`, then 7) or add a `[telegram]` section to `loghunt.ini` by hand (see [telegram.md](telegram.md)), and restart the service. The menu restarts it for you. Environment variables from your shell are not visible to the unit, so use the file.
 
 ## Desktop notifications
 
@@ -69,5 +68,5 @@ They are ordinary system popups from `notify-send` (package `libnotify`: `sudo p
 ## Remove
 
 ```bash
-scripts/install-service.sh uninstall
+loghunt service uninstall
 ```

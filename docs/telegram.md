@@ -4,6 +4,8 @@
 
 ## Set it up
 
+The short way is the menu: run `loghunt`, choose `7` and then `1`. It asks for the token, checks it with Telegram, waits while you send the bot a message, reads your chat id from it and writes `bot_token` and `chat_id` into the config (mode 600). `2` sends a test message, `3` removes the bot, and a running service is restarted by itself. The steps below do the same by hand.
+
 1. In Telegram open [@BotFather](https://t.me/BotFather), send `/newbot`, pick a name and a username that ends in `bot`. BotFather answers with the **bot token**, something like `123456789:AAH...`.
 2. Open your new bot, press **Start** and send it any message. A bot cannot write to you first, and the next step finds nothing until you have written to it.
 3. Find your chat id. The token is a password, so read it without leaving it in the shell history:

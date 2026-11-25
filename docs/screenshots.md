@@ -35,4 +35,4 @@ And the sample logs from the repository:
 
 ## The background service
 
-The service is a systemd user unit, installed with `scripts/install-service.sh` and checked with `systemctl --user status loghunt`. It runs `loghunt watch` and follows the sshd journal. See [service.md](service.md).
+The service is a systemd user unit, installed with `loghunt service install` and checked with `systemctl --user status loghunt`. It runs `loghunt watch` and follows the sshd journal. See [service.md](service.md).
