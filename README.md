@@ -8,8 +8,6 @@
 ![platform](https://img.shields.io/badge/platform-Linux-lightgrey)
 ![license](https://img.shields.io/badge/license-MIT-lightgrey)
 
-**Tags:** `security` `blue-team` `log-analysis` `intrusion-detection` `ssh` `nginx` `mitre-attack` `systemd` `python`
-
 ![live alerts: SSH brute force, then a successful login](evidence/screenshots/ssh-critical.png)
 
 *`loghunt watch` while a brute force against SSH ends with a successful login (MITRE T1078). The popup is a normal system notification.*
