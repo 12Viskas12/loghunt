@@ -53,7 +53,8 @@ class Watcher:
     """Keeps recent events and reports a finding once, not on every new line."""
 
     def __init__(self, detection: Detection, min_severity: str = "medium", cooldown: int = 3600,
-                 keep: int = 3600, year: Optional[int] = None, clock: Callable[[], float] = time.monotonic):
+                 keep: int = 3600, year: Optional[int] = None, clock: Callable[[], float] = time.time,
+                 state_file: Optional[Path] = None):
         self.detection = detection
         self.min_rank = severity_rank(min_severity)
         self.cooldown = cooldown
@@ -62,6 +63,34 @@ class Watcher:
         self.clock = clock
         self.events: Deque[Event] = deque()
         self.alerted: Dict[Tuple[str, str], float] = {}
+        self.state_file = Path(state_file) if state_file else None
+        self._load_state()
+
+    def _load_state(self) -> None:
+        """Remember who was already reported, so a restart does not repeat every alert."""
+        if not self.state_file or not self.state_file.exists():
+            return
+        try:
+            saved = json.loads(self.state_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        now = self.clock()
+        for key, when in saved.items():
+            rule, _, ip = key.partition("|")
+            if isinstance(when, (int, float)) and 0 <= now - when < self.cooldown:
+                self.alerted[(rule, ip)] = float(when)
+
+    def _save_state(self) -> None:
+        if not self.state_file:
+            return
+        try:
+            self.state_file.parent.mkdir(parents=True, exist_ok=True)
+            data = {f"{rule}|{ip}": when for (rule, ip), when in self.alerted.items()}
+            tmp = self.state_file.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data), encoding="utf-8")
+            tmp.replace(self.state_file)
+        except OSError:
+            pass
 
     def feed(self, lines: Iterable[str], kind: str) -> List[Alert]:
         new = list(parse_lines(lines, kind, self.year))
@@ -82,6 +111,8 @@ class Watcher:
                 continue
             self.alerted[key] = now
             out.append(Alert(f, datetime.now()))
+        if out:
+            self._save_state()
         return out
 
 
@@ -258,7 +289,7 @@ def run_watch(s: cfgmod.Settings, notifiers, stop: threading.Event, from_start: 
     for t in threads:
         t.start()
 
-    watcher = Watcher(s.detection, s.min_severity, s.cooldown, year=year)
+    watcher = Watcher(s.detection, s.min_severity, s.cooldown, year=year, state_file=s.state_file)
     while not stop.is_set():
         batch: Dict[str, List[str]] = {}
         try:

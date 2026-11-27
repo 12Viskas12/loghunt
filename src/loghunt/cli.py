@@ -12,7 +12,7 @@ from .report import RENDERERS
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="loghunt", description="Find brute force, scans and web attacks in SSH and web server logs.",
-        epilog="other commands: loghunt menu | watch | service {install,start,stop,status,logs,uninstall} | init-config")
+        epilog="other commands: menu | watch | doctor | top | detect | service {install,start,stop,status,logs,uninstall} | init-config")
     p.add_argument("files", nargs="+", help="auth.log, access.log or similar, - reads stdin")
     p.add_argument("--type", choices=["auto", "ssh", "web"], default="auto", help="log type, auto-detected by default")
     p.add_argument("--format", choices=sorted(RENDERERS), default="text")
@@ -43,11 +43,32 @@ def main(argv: Optional[List[str]] = None) -> int:
     if head == "service":
         from . import service
         return service.run(argv[1] if len(argv) > 1 else "status")
+    if head == "doctor":
+        from .doctor import doctor_main
+        return doctor_main(argv[1:])
+    if head == "top":
+        from .summary import top_main
+        return top_main(argv[1:])
+    if head == "detect":
+        return detect_main(argv[1:])
     if head == "init-config":
         from . import config
         print(config.write_default())
         return 0
     return analyze(argv)
+
+
+def detect_main(argv: List[str]) -> int:
+    from . import config
+    found = config.find_sources()
+    print("sshd journal :", found.ssh_journal or "not used, a log file was found")
+    print("ssh log files:", ", ".join(found.ssh_logs) or "none")
+    print("web log files:", ", ".join(found.web_logs) or "none")
+    if "--write" in argv:
+        print("written to", config.save_sources(found))
+    else:
+        print("add --write to save this into the config")
+    return 0
 
 
 def analyze(argv: List[str]) -> int:

@@ -11,6 +11,8 @@ from . import __version__
 from . import config as cfgmod
 from . import service
 from .cli import analyze
+from . import doctor as doctormod
+from . import summary
 from .telegram import CHAT_RE, TOKEN_RE, TelegramError, TelegramNotifier, api_call, find_chat_id
 from .watch import build_notifiers, dispatch, run_watch, test_alert
 
@@ -240,6 +242,29 @@ class Menu:
             service.run("restart")
             self.say("service restarted with the new settings", DG)
 
+    def do_top(self) -> None:
+        period = self.ask("period [24h]: ") or "24h"
+        try:
+            delta = summary.parse_since(period)
+        except ValueError as exc:
+            self.say(str(exc), R)
+            return
+        rows = summary.load_alerts(self.s.alert_file, delta)
+        self.say(summary.render(summary.summarize(rows), period), G)
+
+    def do_doctor(self) -> None:
+        self.say(doctormod.render(doctormod.run_checks(self.s), self.color))
+
+    def do_detect(self) -> None:
+        found = cfgmod.find_sources()
+        self.say(f"sshd journal : {found.ssh_journal or 'not used, a log file was found'}")
+        self.say(f"ssh log files: {', '.join(found.ssh_logs) or 'none'}")
+        self.say(f"web log files: {', '.join(found.web_logs) or 'none'}")
+        if self.ask("save this into the config? [y/N] ").lower().startswith("y"):
+            self.say(f"saved to {cfgmod.save_sources(found)}", G)
+            self.s.ssh_journal, self.s.ssh_logs, self.s.web_logs = found.ssh_journal, found.ssh_logs, found.web_logs
+            self.restart_service()
+
     def do_config(self) -> None:
         path = cfgmod.config_path()
         if not path.exists():
@@ -261,6 +286,9 @@ class Menu:
             ("6", "send a test notification", self.do_test),
             ("7", "telegram bot", self.do_telegram),
             ("8", "config", self.do_config),
+            ("9", "top attackers", self.do_top),
+            ("10", "doctor, check everything", self.do_doctor),
+            ("11", "find log sources", self.do_detect),
             ("0", "quit", None),
         ]
 

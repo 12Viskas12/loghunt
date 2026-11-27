@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "loghunt"
-version = "0.1.0"
+version = "2.9.7"
 description = "Find brute force, scans and web attacks in SSH and web server logs"
 readme = "README.md"
 requires-python = ">=3.9"

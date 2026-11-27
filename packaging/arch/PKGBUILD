@@ -1,6 +1,6 @@
 # Maintainer: 12Viskas12
 pkgname=loghunt
-pkgver=0.1.0
+pkgver=2.9.7
 pkgrel=1
 pkgdesc='Finds brute force, scans and web attacks in SSH and web server logs, with alerts'
 arch=('any')

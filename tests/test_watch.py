@@ -261,6 +261,8 @@ def test_run_watch_without_sources(capsys):
 def test_config_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     monkeypatch.setattr(cfgmod, "SSH_UNIT_FILES", ())
+    monkeypatch.setattr(cfgmod, "SSH_LOG_CANDIDATES", ())
+    monkeypatch.setattr(cfgmod, "WEB_LOG_CANDIDATES", ())
     path = cfgmod.write_default(tmp_path / "loghunt.ini")
     assert oct(path.stat().st_mode & 0o777) == "0o600"
     s = cfgmod.load(path)

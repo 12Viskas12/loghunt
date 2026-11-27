@@ -7,6 +7,7 @@
 ![dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![platform](https://img.shields.io/badge/platform-Linux-lightgrey)
 ![license](https://img.shields.io/badge/license-MIT-lightgrey)
+![version](https://img.shields.io/badge/version-2.9.7-orange)
 
 ![live alerts: SSH brute force, then a successful login](evidence/screenshots/ssh-critical.png)
 
@@ -47,8 +48,11 @@ It has no dependencies, only Python 3.9 or newer.
 - **Live monitor:** follows files and the systemd journal, reports each finding once, then keeps that rule and address quiet for an hour.
 - **Alert channels:** colored console output, a JSON lines file, desktop notifications through `notify-send`, and a Telegram bot.
 - **Terminal menu:** a hacker-style menu to analyse logs, control the service, read the last alerts and set up the Telegram bot.
-- **Background service:** a systemd user unit, installed with one command.
-- **Packages:** a PKGBUILD for Arch and a `.deb` for Debian and Ubuntu.
+- **Background service:** a systemd user unit, installed with one command. Reported attackers are remembered across restarts.
+- **Doctor:** `loghunt doctor` checks log access, groups, notifications, Telegram and the service, and says what to fix.
+- **Summary:** `loghunt top` ranks the attackers of the last day, week or any period.
+- **Source detection:** `loghunt detect` finds auth.log, the sshd journal, nginx and Apache logs and writes them into the config.
+- **Packages:** a PKGBUILD for Arch and a `.deb` for Debian and Ubuntu, built by CI and attached to every release.
 - **CI friendly:** `--fail-on high` returns exit code 1, and the report can be text, brief, Markdown or JSON.
 
 ![terminal menu](evidence/screenshots/menu.png)
@@ -74,16 +78,22 @@ cd loghunt/packaging/arch
 makepkg -si
 ```
 
-Debian and Ubuntu:
+Debian and Ubuntu, from the latest [release](https://github.com/12Viskas12/loghunt/releases/latest):
+
+```bash
+sudo apt install ./loghunt_2.9.7_all.deb
+```
+
+Or build the package yourself:
 
 ```bash
 git clone https://github.com/12Viskas12/loghunt
 cd loghunt
 scripts/build-deb.sh
-sudo apt install ./dist/loghunt_0.1.0_all.deb
+sudo apt install ./dist/loghunt_2.9.7_all.deb
 ```
 
-Both put `loghunt` into `/usr/bin` and the service unit into `/usr/lib/systemd/user`, so the command works from any directory. `pacman -R loghunt` or `apt remove loghunt` removes it again.
+After either install, run `loghunt doctor` to see what still needs doing. The packages put `loghunt` into `/usr/bin` and the service unit into `/usr/lib/systemd/user`, so the command works from any directory. `pacman -R loghunt` or `apt remove loghunt` removes it again.
 
 For development, install it in a virtualenv:
 
@@ -171,6 +181,19 @@ Run `loghunt` without arguments in a terminal, or `loghunt menu`. The menu shows
 6. send a test notification
 7. set up the Telegram bot: it asks for the token, checks it, finds your chat id from the first message you send to the bot and saves both to the config
 8. show the config
+9. top attackers of the last period
+10. doctor, a check of the whole setup
+11. find the log sources on this machine and save them to the config
+
+### Doctor, top and detect
+
+```bash
+loghunt doctor              # checks everything, exit code 1 if something is broken
+loghunt top --since 7d      # who attacked lately, worst first
+loghunt detect --write      # find auth.log, the journal unit, nginx and Apache logs
+```
+
+`doctor` prints one line per check and the command that fixes each problem, for example the missing `systemd-journal` group or a log file your user cannot read. `top` reads `alerts.jsonl`, test alerts are left out. See the [changelog](CHANGELOG.md) for what is new.
 
 ### Background service
 
@@ -232,7 +255,7 @@ pip install -e ".[dev]"
 pytest
 ```
 
-There are 106 tests for the parsers, every rule (including the edge of each threshold and cases that must stay quiet), the watcher, every notifier, the menu and the command line. GitHub Actions runs them on Python 3.9, 3.11 and 3.13.
+There are 132 tests for the parsers, every rule (including the edge of each threshold and cases that must stay quiet), the watcher, every notifier, the menu and the command line. GitHub Actions runs them on Python 3.9, 3.11 and 3.13.
 
 ![pytest](evidence/screenshots/tests.png)
 

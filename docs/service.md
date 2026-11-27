@@ -8,7 +8,7 @@ loghunt service install
 
 This writes `~/.config/loghunt/loghunt.ini` if it is missing, then runs `systemctl --user enable --now loghunt.service`. The pacman and apt packages ship the unit in `/usr/lib/systemd/user`, and it is used as it is. After a plain pip install the command writes its own unit into `~/.config/systemd/user` that starts the same Python.
 
-Check it:
+Check everything at once with `loghunt doctor`, or one by one:
 
 ```bash
 systemctl --user status loghunt
